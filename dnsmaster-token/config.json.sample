@@ -1,0 +1,11 @@
+{
+    "client_id":"oauth_client_id",
+    "client_secret":"oauth_secret",
+    "username":"username/NIC-D",
+    "password":"password",
+    "token_url":"https://api.nic.ru/oauth/token",
+    "scope":[
+        ".+:/dns-master/services/EXAMPLESERVICE/zones/example.com(/.+)?"
+    ],
+    "access_token_path":"/patch/to/token"
+}
