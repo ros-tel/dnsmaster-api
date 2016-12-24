@@ -13,6 +13,13 @@ import (
 	"time"
 )
 
+type (
+	apiClient struct {
+		c     *http.Client
+		token string
+	}
+)
+
 var (
 	err error
 
@@ -54,27 +61,39 @@ func main() {
 		log.Fatal(err)
 	}
 
+	cl := &apiClient{
+		c: &http.Client{
+			Timeout: 20 * time.Second,
+			Transport: &http.Transport{
+				IdleConnTimeout:     30 * time.Second,
+				DisableKeepAlives:   false,
+				MaxIdleConnsPerHost: 5,
+			},
+		},
+		token: token,
+	}
+
 	switch *action {
 	case "list":
-		listZone(token)
+		cl.listZone()
 	case "add":
 		if *ipv4 != "" {
-			addResource(token, "A", *resouce_name, *ipv4)
+			cl.addResource("A", *resouce_name, *ipv4)
 		}
 		if *ipv6 != "" {
-			addResource(token, "AAAA", *resouce_name, *ipv6)
+			cl.addResource("AAAA", *resouce_name, *ipv6)
 		}
 	case "del":
 		if *ipv4 != "" {
-			delResource(token, "A", *resouce_name, *ipv4)
+			cl.delResource("A", *resouce_name, *ipv4)
 		}
 		if *ipv6 != "" {
-			delResource(token, "AAAA", *resouce_name, *ipv6)
+			cl.delResource("AAAA", *resouce_name, *ipv6)
 		}
 		if !ipset {
 			// delete all "A" and "AAAA" resource
-			delResource(token, "A", *resouce_name, "")
-			delResource(token, "AAAA", *resouce_name, "")
+			cl.delResource("A", *resouce_name, "")
+			cl.delResource("AAAA", *resouce_name, "")
 		}
 	default:
 		flag.PrintDefaults()
@@ -97,15 +116,15 @@ func getToken(file_path string) (string, error) {
 	return string(contents), nil
 }
 
-func listZone(token string) {
-	contents, err := apiRequest(token, "GET", "https://api.nic.ru/dns-master/services/"+*service+"/zones/"+*zone+"/records", nil)
+func (cl *apiClient) listZone() {
+	contents, err := cl.apiRequest("GET", "https://api.nic.ru/dns-master/services/"+*service+"/zones/"+*zone+"/records", nil)
 	if err != nil {
 		log.Fatal(err)
 	}
 	fmt.Printf("Content: %s\n", contents)
 }
 
-func findResouceID(token, rtype, rname, ip string) (string, error) {
+func (cl *apiClient) findResouceID(rtype, rname, ip string) (string, error) {
 	var resp struct {
 		Status string `xml:"status"`
 		Data   struct {
@@ -122,7 +141,7 @@ func findResouceID(token, rtype, rname, ip string) (string, error) {
 		} `xml:"data"`
 	}
 
-	contents, err := apiRequest(token, "GET", "https://api.nic.ru/dns-master/services/"+*service+"/zones/"+*zone+"/records", nil)
+	contents, err := cl.apiRequest("GET", "https://api.nic.ru/dns-master/services/"+*service+"/zones/"+*zone+"/records", nil)
 	if err != nil {
 		return "", err
 	}
@@ -148,8 +167,8 @@ func findResouceID(token, rtype, rname, ip string) (string, error) {
 	return "", nil
 }
 
-func addResource(token, rtype, rname, ip string) error {
-	rid, err := findResouceID(token, rtype, rname, ip)
+func (cl *apiClient) addResource(rtype, rname, ip string) error {
+	rid, err := cl.findResouceID(rtype, rname, ip)
 	if err != nil {
 		return err
 	}
@@ -186,7 +205,7 @@ func addResource(token, rtype, rname, ip string) error {
 		log.Fatal(err)
 	}
 
-	contents, err := apiRequest(token, "PUT", "https://api.nic.ru/dns-master/services/"+*service+"/zones/"+*zone+"/records", bytes.NewReader(append([]byte(xml.Header)[:], rdata[:]...)))
+	contents, err := cl.apiRequest("PUT", "https://api.nic.ru/dns-master/services/"+*service+"/zones/"+*zone+"/records", bytes.NewReader(append([]byte(xml.Header)[:], rdata[:]...)))
 	if err != nil {
 		return err
 	}
@@ -195,9 +214,9 @@ func addResource(token, rtype, rname, ip string) error {
 	return nil
 }
 
-func delResource(token, rtype, rname, ip string) error {
+func (cl *apiClient) delResource(rtype, rname, ip string) error {
 	for {
-		rid, err := findResouceID(token, rtype, rname, ip)
+		rid, err := cl.findResouceID(rtype, rname, ip)
 		if err != nil {
 			return err
 		}
@@ -207,7 +226,7 @@ func delResource(token, rtype, rname, ip string) error {
 			return nil
 		}
 
-		contents, err := apiRequest(token, "DELETE", "https://api.nic.ru/dns-master/services/"+*service+"/zones/"+*zone+"/records/"+rid, nil)
+		contents, err := cl.apiRequest("DELETE", "https://api.nic.ru/dns-master/services/"+*service+"/zones/"+*zone+"/records/"+rid, nil)
 		if err != nil {
 			return err
 		}
@@ -216,22 +235,13 @@ func delResource(token, rtype, rname, ip string) error {
 	return nil
 }
 
-func apiRequest(token, method, url string, body io.Reader) ([]byte, error) {
-	httpClient := &http.Client{
-		Timeout: 20 * time.Second,
-		Transport: &http.Transport{
-			IdleConnTimeout:     30 * time.Second,
-			DisableKeepAlives:   false,
-			MaxIdleConnsPerHost: 5,
-		},
-	}
-
+func (cl *apiClient) apiRequest(method, url string, body io.Reader) ([]byte, error) {
 	req, err := http.NewRequest(method, url, body)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+token)
-	resp, err := httpClient.Do(req)
+	req.Header.Set("Authorization", "Bearer "+cl.token)
+	resp, err := cl.c.Do(req)
 	if err != nil {
 		return nil, err
 	}
