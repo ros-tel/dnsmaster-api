@@ -1,0 +1,21 @@
+[Unit]
+Description=Dnsmaster Token Updater
+After=network.target
+
+[Service]
+; User=www-data
+; Group=www-data
+; PermissionsStartOnly=yes
+Environment=HOME=/opt/dnsmaster-token
+WorkingDirectory=/opt/dnsmaster-token
+; ExecStartPre=
+ExecStart=/opt/dnsmaster-token/dnsmaster-token /opt/dnsmaster-token/config.json
+; ExecStop=
+; ExecReload=
+Restart=always
+RestartSec=5
+StartLimitInterval=500
+StartLimitBurst=100
+
+[Install]
+WantedBy=multi-user.target

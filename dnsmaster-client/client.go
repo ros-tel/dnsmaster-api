@@ -174,7 +174,7 @@ func (cl *apiClient) addResource(rtype, rname, ip string) error {
 	}
 
 	if rid != "" {
-		log.Printf("Resource name \"%s\" type \"%s\" exists id", rname, rtype, rid)
+		log.Printf("Resource name \"%s\" type \"%s\" exists id \"%s\"", rname, rtype, rid)
 		return nil
 	}
 
