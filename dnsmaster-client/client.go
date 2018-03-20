@@ -24,7 +24,7 @@ var (
 	err error
 
 	token_file = flag.String("token_file", "", "Usage: -token_file=path/token_file")
-	action     = flag.String("action", "", "Usage: -action=<list|add|del>")
+	action     = flag.String("action", "", "Usage: -action=<list|add|del|commit>")
 	zone       = flag.String("zone", "", "Usage: -zone=example.com")
 	service    = flag.String("service", "", "Usage: -service=EXAMPLE")
 
@@ -74,6 +74,8 @@ func main() {
 	}
 
 	switch *action {
+	case "commit":
+		cl.commitZone()
 	case "list":
 		cl.listZone()
 	case "add":
@@ -118,6 +120,14 @@ func getToken(file_path string) (string, error) {
 
 func (cl *apiClient) listZone() {
 	contents, err := cl.apiRequest("GET", "https://api.nic.ru/dns-master/services/"+*service+"/zones/"+*zone+"/records", nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("Content: %s\n", contents)
+}
+
+func (cl *apiClient) commitZone() {
+	contents, err := cl.apiRequest("POST", "https://api.nic.ru/dns-master/services/"+*service+"/zones/"+*zone+"/commit", nil)
 	if err != nil {
 		log.Fatal(err)
 	}
